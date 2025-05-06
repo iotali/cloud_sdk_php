@@ -272,12 +272,29 @@ class Device
             
             // 遍历统计
             foreach ($devicesData as $deviceInfo) {
-                $deviceStatus = $deviceInfo["deviceStatus"] ?? [];
-                $status = $deviceStatus["status"] ?? "未知";
+                // 直接从设备信息中获取状态，而不是通过deviceStatus字段
+                $status = $deviceInfo["status"] ?? "未知";
                 
                 // 更新状态计数
                 if (isset($statusCounts[$status])) {
                     $statusCounts[$status]++;
+                }
+                
+                // 输出设备详细信息
+                $deviceName = $deviceInfo["deviceName"] ?? "未知";
+                $deviceId = $deviceInfo["deviceId"] ?? "未知";
+                $this->logger->debug("设备: {$deviceName} (ID: {$deviceId}) - 状态: " . Utils::getStatusText($status));
+                
+                // 显示额外信息（如果存在）
+                if (isset($deviceInfo["lastOnlineTime"])) {
+                    $lastOnlineTime = (int)($deviceInfo["lastOnlineTime"] / 1000);
+                    $dt = new DateTime();
+                    $dt->setTimestamp($lastOnlineTime);
+                    $this->logger->debug("  最后在线时间: " . $dt->format("Y-m-d H:i:s"));
+                }
+                
+                if (isset($deviceInfo["asAddress"])) {
+                    $this->logger->debug("  接入IP: " . $deviceInfo["asAddress"]);
                 }
             }
             
@@ -328,6 +345,47 @@ class Device
             } else {
                 $this->logger->info("设备未在超时时间内响应");
             }
+        }
+        
+        return $response;
+    }
+    
+    /**
+     * 发送自定义指令（异步）
+     * 
+     * 注意：此方法要求设备已订阅了/{productKey}/{deviceName}/user/get主题
+     *
+     * @param string $deviceName 设备编码
+     * @param string $messageContent 消息内容，会被自动Base64编码
+     * @return array 发送结果
+     */
+    public function sendCustomCommand(string $deviceName, string $messageContent): array
+    {
+        $endpoint = "/api/v1/device/down/record/add/custom";
+        
+        // 将消息内容转换为Base64编码
+        $base64Message = base64_encode($messageContent);
+        
+        // 构建请求体
+        $payload = [
+            "deviceName" => $deviceName,
+            "messageContent" => $base64Message
+        ];
+        
+        // 发送请求
+        $response = $this->client->makeRequest($endpoint, $payload);
+        
+        // 检查结果并格式化输出
+        if ($this->client->checkResponse($response)) {
+            $this->logger->info("自定义指令已发送到设备: {$deviceName}");
+            $this->logger->debug("原始消息内容: {$messageContent}");
+            
+            if (isset($response["data"])) {
+                $this->logger->debug("响应数据: " . json_encode($response["data"], JSON_UNESCAPED_UNICODE));
+            }
+        } else {
+            $errorMsg = $response["errorMessage"] ?? "未知错误";
+            $this->logger->error("自定义指令发送失败: {$errorMsg}");
         }
         
         return $response;

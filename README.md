@@ -19,6 +19,7 @@ SDK采用模块化设计，主要包含以下组件：
   - 批量设备状态查询
 - 远程控制
   - RRPC消息发送
+  - 自定义指令下发（异步）
 
 ## 安装要求
 
@@ -109,9 +110,16 @@ if ($client->checkResponse($response)) {
 $deviceNames = ["device1", "device2", "device3"];
 $response = $deviceManager->batchGetDeviceStatus(deviceNameList: $deviceNames);
 
-// 或者通过设备ID列表查询
-$deviceIds = ["id1", "id2", "id3"];
-$response = $deviceManager->batchGetDeviceStatus(deviceIdList: $deviceIds);
+// 处理结果
+if ($client->checkResponse($response)) {
+    $devicesData = $response["data"];
+    foreach ($devicesData as $deviceInfo) {
+        echo "设备: " . $deviceInfo['deviceName'] . "\n";
+        echo "状态: " . $deviceInfo['status'] . "\n";
+        echo "最后在线时间: " . date('Y-m-d H:i:s', $deviceInfo['lastOnlineTime']/1000) . "\n";
+        echo "-------------------\n";
+    }
+}
 ```
 
 ### 6. 发送RRPC消息
@@ -127,13 +135,27 @@ $response = $deviceManager->sendRrpcMessage(
 );
 ```
 
+### 7. 发送自定义指令（异步）
+
+```php
+<?php
+// 向设备发送自定义指令
+// 注意：设备需要已订阅/{productKey}/{deviceName}/user/get主题
+$messageContent = json_encode([
+    'command' => 'set_mode',
+    'params' => [
+        'mode' => 2,
+        'duration' => 30
+    ]
+]);
+
+$response = $deviceManager->sendCustomCommand(
+    "your-device-name",
+    $messageContent  // 将被自动Base64编码
+);
+```
+
 ## 示例代码
-
-参见 `examples` 目录下的示例文件，展示了SDK的具体用法。
-
-## 异常处理
-
-SDK提供了统一的异常处理机制：
 
 ```php
 <?php
