@@ -12,12 +12,12 @@ use function IoTSdk\createClientFromCredentials;
 use function IoTSdk\createDeviceManager;
 
 // 配置
-$baseUrl = 'https://deviot.know-act.com';
+$baseUrl = 'https://xxx.xxx.com';
 $productKey = 'NrateJMx'; // 替换为您的产品密钥
 
 // 应用凭证
-$appId = 'app-6808aa3';
-$appSecret = '6808aa30614c4c9f32386dc4';
+$appId = 'app-680***';
+$appSecret = '6808aa30614c4*****';
 
 /**
  * 使用应用凭证初始化客户端
