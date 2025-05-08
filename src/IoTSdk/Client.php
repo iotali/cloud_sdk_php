@@ -94,6 +94,81 @@ class Client
     }
 
     /**
+     * 通过应用凭证初始化IoT客户端
+     *
+     * @param string $baseUrl API基础URL
+     * @param string $appId 应用ID
+     * @param string $appSecret 应用密钥
+     * @param LoggerInterface|null $logger 可选的日志记录器
+     * @return Client IoT客户端实例
+     * @throws \Exception 认证失败时抛出异常
+     */
+    public static function fromCredentials(string $baseUrl, string $appId, string $appSecret, ?LoggerInterface $logger = null): Client
+    {
+        // 设置日志记录器
+        if ($logger === null) {
+            $logger = new Logger('iotsdk');
+            $logger->pushHandler(new StreamHandler('php://stdout', Logger::INFO));
+        }
+        
+        $logger->info("通过应用凭证初始化IoT客户端");
+        
+        // 构建身份验证URL
+        $baseUrl = rtrim($baseUrl, '/');
+        $authUrl = "{$baseUrl}/api/v1/oauth/auth";
+        
+        // 准备认证请求
+        $httpClient = new HttpClient([
+            'timeout' => 10.0,
+            'connect_timeout' => 3.0
+        ]);
+        
+        $payload = [
+            'appId' => $appId,
+            'appSecret' => $appSecret
+        ];
+        
+        $logger->debug("发送认证请求: POST {$authUrl}", [
+            'payload' => $payload
+        ]);
+        
+        try {
+            // 发送认证请求
+            $response = $httpClient->request('POST', $authUrl, [
+                'headers' => ['Content-Type' => 'application/json'],
+                'json' => $payload
+            ]);
+            
+            // 解析响应
+            $responseBody = $response->getBody()->getContents();
+            $result = json_decode($responseBody, true);
+            
+            if ($result === null && json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception("无法解析认证响应为JSON: " . json_last_error_msg());
+            }
+            
+            $logger->debug("收到认证响应", ['response' => $result]);
+            
+            // 检查响应是否成功
+            if (!isset($result['success']) || !$result['success'] || $result['code'] != 200) {
+                $errorMsg = $result['errorMessage'] ?? '未知错误';
+                $logger->error("认证失败: {$errorMsg}");
+                throw new \Exception("认证失败: {$errorMsg}");
+            }
+            
+            // 获取token并创建客户端实例
+            $token = $result['data'];
+            $logger->info("认证成功，已获取token");
+            
+            return new self($baseUrl, $token, $logger);
+            
+        } catch (RequestException $e) {
+            $logger->error("认证请求错误: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
      * 发送API请求的通用方法
      *
      * @param string $endpoint API端点路径
@@ -189,5 +264,25 @@ class Client
     public function getLogger(): LoggerInterface
     {
         return $this->logger;
+    }
+    
+    /**
+     * 获取token
+     *
+     * @return string 认证令牌
+     */
+    public function getToken(): string
+    {
+        return $this->token;
+    }
+    
+    /**
+     * 获取baseUrl
+     *
+     * @return string API基础URL
+     */
+    public function getBaseUrl(): string
+    {
+        return $this->baseUrl;
     }
 } 

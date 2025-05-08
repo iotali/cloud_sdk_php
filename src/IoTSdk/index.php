@@ -25,6 +25,20 @@ function createClient(string $baseUrl, string $token, $logger = null)
 }
 
 /**
+ * 通过应用凭证创建IoT客户端
+ * 
+ * @param string $baseUrl API基础URL
+ * @param string $appId 应用ID
+ * @param string $appSecret 应用密钥
+ * @param \Psr\Log\LoggerInterface|null $logger 可选的日志记录器
+ * @return Client IoT客户端实例
+ */
+function createClientFromCredentials(string $baseUrl, string $appId, string $appSecret, $logger = null)
+{
+    return Client::fromCredentials($baseUrl, $appId, $appSecret, $logger);
+}
+
+/**
  * 创建设备管理器
  * 
  * @param Client $client IoT客户端实例

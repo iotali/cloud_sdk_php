@@ -319,31 +319,57 @@ class Device
      */
     public function sendRrpcMessage(string $deviceName, string $productKey, string $messageContent, int $timeout = 5000): array
     {
-        $endpoint = "/api/v1/quickdevice/rrpc";
+        $endpoint = "/api/v1/device/rrpc";
+        
+        // 消息内容Base64编码
+        $base64Message = base64_encode($messageContent);
         
         // 构建请求体
         $payload = [
             "deviceName" => $deviceName,
             "productKey" => $productKey,
-            "messageContent" => $messageContent,
+            "requestBase64Byte" => $base64Message,
             "timeout" => $timeout
         ];
+        
+        $this->logger->debug("发送RRPC消息", [
+            'deviceName' => $deviceName,
+            'originalMessage' => $messageContent,
+            'encodedMessage' => $base64Message
+        ]);
         
         // 发送请求
         $response = $this->client->makeRequest($endpoint, $payload);
         
         // 检查结果并格式化输出
         if ($this->client->checkResponse($response)) {
-            $resultData = $response["data"] ?? [];
-            $messageId = $resultData["messageId"] ?? "未知";
-            $deviceResponse = $resultData["response"] ?? null;
+            // 获取Base64编码的响应
+            $base64Payload = $response["payloadBase64Byte"] ?? null;
             
-            $this->logger->info("RRPC消息已发送，消息ID: {$messageId}");
-            
-            if ($deviceResponse !== null) {
-                $this->logger->info("设备响应: {$deviceResponse}");
+            if ($base64Payload) {
+                // 解码Base64字符串
+                try {
+                    $decodedContent = base64_decode($base64Payload);
+                    $decodedString = $decodedContent;
+                    
+                    // 尝试将其作为字符串解码
+                    if ($decodedContent !== false) {
+                        $stringContent = $decodedContent;
+                        $this->logger->info("解码后的响应内容: {$stringContent}");
+                        
+                        // 尝试解析为JSON
+                        $jsonData = json_decode($stringContent, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $this->logger->info("解析为JSON成功");
+                        } else {
+                            $this->logger->debug("响应内容不是有效的JSON格式");
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $this->logger->error("解析响应内容失败: " . $e->getMessage());
+                }
             } else {
-                $this->logger->info("设备未在超时时间内响应");
+                $this->logger->warning("响应中没有包含payloadBase64Byte字段");
             }
         }
         
@@ -351,19 +377,17 @@ class Device
     }
     
     /**
-     * 发送自定义指令（异步）
-     * 
-     * 注意：此方法要求设备已订阅了/{productKey}/{deviceName}/user/get主题
+     * 发送自定义指令
      *
      * @param string $deviceName 设备编码
-     * @param string $messageContent 消息内容，会被自动Base64编码
-     * @return array 发送结果
+     * @param string $messageContent 消息内容
+     * @return array 消息发送结果
      */
     public function sendCustomCommand(string $deviceName, string $messageContent): array
     {
         $endpoint = "/api/v1/device/down/record/add/custom";
         
-        // 将消息内容转换为Base64编码
+        // 消息内容Base64编码
         $base64Message = base64_encode($messageContent);
         
         // 构建请求体
@@ -372,20 +396,25 @@ class Device
             "messageContent" => $base64Message
         ];
         
+        $this->logger->debug("发送自定义指令", [
+            'deviceName' => $deviceName,
+            'originalMessage' => $messageContent,
+            'encodedMessage' => $base64Message
+        ]);
+        
         // 发送请求
         $response = $this->client->makeRequest($endpoint, $payload);
         
-        // 检查结果并格式化输出
+        // 检查结果
         if ($this->client->checkResponse($response)) {
-            $this->logger->info("自定义指令已发送到设备: {$deviceName}");
-            $this->logger->debug("原始消息内容: {$messageContent}");
+            $this->logger->info("自定义指令下发成功");
             
-            if (isset($response["data"])) {
-                $this->logger->debug("响应数据: " . json_encode($response["data"], JSON_UNESCAPED_UNICODE));
+            if (isset($response['data'])) {
+                $this->logger->debug("响应数据", ['data' => $response['data']]);
             }
         } else {
-            $errorMsg = $response["errorMessage"] ?? "未知错误";
-            $this->logger->error("自定义指令发送失败: {$errorMsg}");
+            $errorMsg = $response['errorMessage'] ?? '未知错误';
+            $this->logger->warning("自定义指令下发失败: {$errorMsg}");
         }
         
         return $response;

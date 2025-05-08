@@ -18,6 +18,9 @@
     "autoload": {
         "psr-4": {
             "IoTSdk\\": "src/IoTSdk/"
-        }
+        },
+        "files": [
+            "src/IoTSdk/index.php"
+        ]
     }
-} 
+}
