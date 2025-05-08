@@ -12,6 +12,9 @@ SDK采用模块化设计，主要包含以下组件：
 
 ## 功能特性
 
+- 认证管理
+  - 通过token直接认证
+  - **新增：** 通过应用凭证(appId/appSecret)自动获取token
 - 设备管理
   - 设备注册
   - 设备详情查询
@@ -34,6 +37,8 @@ composer install
 
 ### 1. 创建客户端和设备管理器
 
+#### 方式一：使用token创建客户端（传统方式）
+
 ```php
 <?php
 require 'vendor/autoload.php';
@@ -43,12 +48,32 @@ use IoTSdk\Device;
 
 // 创建IoT客户端
 $client = Client::create(
-    "http://your-iot-platform-url",
+    "https://your-iot-platform-url",
     "your-auth-token"
 );
 
 // 创建设备管理器
 $deviceManager = Device::create($client);
+```
+
+#### 方式二：使用应用凭证创建客户端（推荐方式）
+
+```php
+<?php
+require 'vendor/autoload.php';
+
+use function IoTSdk\createClientFromCredentials;
+use function IoTSdk\createDeviceManager;
+
+// 使用应用凭证自动获取token并创建客户端
+$client = createClientFromCredentials(
+    "https://your-iot-platform-url",
+    "your-app-id",
+    "your-app-secret"
+);
+
+// 创建设备管理器
+$deviceManager = createDeviceManager($client);
 ```
 
 ### 2. 设备注册
@@ -133,6 +158,15 @@ $response = $deviceManager->sendRrpcMessage(
     "Hello Device",
     5000  // 超时时间(毫秒)
 );
+
+// 检查结果
+if ($client->checkResponse($response)) {
+    // 处理返回的payloadBase64Byte字段
+    if (isset($response['payloadBase64Byte'])) {
+        $decodedContent = base64_decode($response['payloadBase64Byte']);
+        echo "设备响应: " . $decodedContent . "\n";
+    }
+}
 ```
 
 ### 7. 发送自定义指令（异步）
@@ -153,24 +187,55 @@ $response = $deviceManager->sendCustomCommand(
     "your-device-name",
     $messageContent  // 将被自动Base64编码
 );
+
+if ($client->checkResponse($response)) {
+    echo "自定义指令下发成功!\n";
+}
 ```
 
-## 示例代码
+## 完整示例
+
+### 使用应用凭证并重用客户端
 
 ```php
 <?php
+require 'vendor/autoload.php';
+
+use function IoTSdk\createClientFromCredentials;
+use function IoTSdk\createDeviceManager;
+
+// 配置参数
+$baseUrl = 'https://your-iot-platform-url';
+$appId = 'your-app-id';
+$appSecret = 'your-app-secret';
+$productKey = 'your-product-key';
+
+// 初始化客户端（仅一次）
 try {
-    $response = $deviceManager->getDeviceStatus(deviceName: "your-device-name");
-    if ($client->checkResponse($response)) {
-        // 处理成功响应
-    } else {
-        // 处理API错误
-        $errorMsg = $response["errorMessage"] ?? "未知错误";
-        echo "API调用失败: " . $errorMsg . "\n";
+    $client = createClientFromCredentials($baseUrl, $appId, $appSecret);
+    echo "客户端初始化成功，Token: " . substr($client->getToken(), 0, 10) . "...\n";
+    
+    // 创建设备管理器
+    $deviceManager = createDeviceManager($client);
+    
+    // 执行多个操作，复用同一个客户端
+    $deviceName = "test-device-1";
+    
+    // 查询设备状态
+    $statusResponse = $deviceManager->getDeviceStatus($deviceName);
+    if ($client->checkResponse($statusResponse)) {
+        $status = $statusResponse['data']['status'] ?? 'unknown';
+        echo "设备状态: $status\n";
     }
+    
+    // 发送指令
+    $commandJson = json_encode(['command' => 'refresh']);
+    $cmdResponse = $deviceManager->sendCustomCommand($deviceName, $commandJson);
+    
+    // 其他操作...
+    
 } catch (Exception $e) {
-    // 处理网络或其他异常
-    echo "发生异常: " . $e->getMessage() . "\n";
+    echo "错误: " . $e->getMessage() . "\n";
 }
 ```
 
@@ -189,16 +254,27 @@ $logger->pushHandler(new StreamHandler('path/to/your.log', Logger::DEBUG));
 
 // 创建带自定义日志的客户端
 $client = Client::create(
-    "http://your-iot-platform-url",
+    "https://your-iot-platform-url",
     "your-auth-token",
+    $logger
+);
+
+// 或使用应用凭证创建
+$client = createClientFromCredentials(
+    "https://your-iot-platform-url",
+    "your-app-id",
+    "your-app-secret",
     $logger
 );
 ```
 
 ## 注意事项
 
-- 使用前请确保已获取正确的认证令牌和产品密钥
+- **认证方式**：推荐使用应用凭证方式自动获取token
+- **客户端复用**：创建一次客户端实例后在应用程序中复用，避免重复获取token
+- 使用前请确保已获取正确的认证令牌/应用凭证和产品密钥
 - 所有API调用都会返回完整的响应内容，便于进一步处理和分析
+- 自定义指令下发需要设备已订阅相应的主题
 
 ## 贡献
 
