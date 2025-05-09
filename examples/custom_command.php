@@ -13,8 +13,8 @@ use IoTSdk\Device;
 use IoTSdk\Utils;
 
 // 配置参数
-$baseUrl = 'http://121.40.253.224:10081'; // 替换为实际的API地址
-$token = '488820fb-41af-40e5-b2d3-d45a8c576eea'; // 替换为实际的认证令牌
+$baseUrl = 'http://your-iot-platform-url'; // 替换为实际的API地址
+$token = 'your-auth-token'; // 替换为实际的认证令牌
 
 // 设备参数
 $deviceName = 'test_device_001'; // 替换为实际的设备名称
